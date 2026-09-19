@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    >
+    <title>Muffy Adventures</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- =========================================
+         JOGO PHASER (menu, mapa e fases)
+    ========================================== -->
+
+    <div id="game-container"></div>
+
+
+    <!-- =========================================
+         HUD (só aparece durante a fase jogável)
+    ========================================== -->
+
+    <div id="hud">
+        <div id="lives-display" class="hud-item"></div>
+        <div id="timer-display" class="hud-item">⏱️ 2:00</div>
+        <div id="power-display" class="hud-item"></div>
+    </div>
+
+
+    <!-- =========================================
+         CONTROLES MOBILE
+    ========================================== -->
+
+    <div id="mobile-controls">
+
+        <div class="movement-controls">
+            <button id="left-btn" class="game-button movement-button" aria-label="Mover para esquerda">◀</button>
+            <button id="right-btn" class="game-button movement-button" aria-label="Mover para direita">▶</button>
+        </div>
+
+        <div class="action-controls">
+            <button id="attack-btn" class="game-button attack-button" aria-label="Atacar">🥕</button>
+            <button id="jump-btn" class="game-button jump-button" aria-label="Pular">PULAR</button>
+        </div>
+
+    </div>
+
+
+    <!-- =========================================
+         PHASER + SCRIPTS DO JOGO
+    ========================================== -->
+
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
+
+    <script src="saveManager.js"></script>
+    <script src="levels.js"></script>
+    <script src="game.js"></script>
+
+</body>
+
+</html>
