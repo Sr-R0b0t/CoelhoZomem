@@ -62,6 +62,88 @@ const PROJECTILE_LIFETIME = 1200;
 const mobileControls = { left: false, right: false, jump: false, attack: false };
 
 /* =========================================================
+   EFEITOS SONOROS
+   Gerados na hora via Web Audio API (sem arquivos de áudio).
+   O AudioContext só pode ser criado/retomado depois de um
+   gesto do usuário (clique/toque/tecla) — por isso ele nasce
+   sob demanda, na primeira vez que um som é tocado.
+========================================================= */
+
+const SFX = (() => {
+    let ctx = null;
+
+    function getCtx() {
+        if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if (ctx.state === 'suspended') ctx.resume();
+        return ctx;
+    }
+
+    /* Um "bipe" com a frequência deslizando de start pra end */
+    function tone(freqStart, freqEnd, duration, type = 'square', volume = 0.15, delay = 0) {
+        const audioCtx = getCtx();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = type;
+
+        const startTime = audioCtx.currentTime + delay;
+        osc.frequency.setValueAtTime(Math.max(freqStart, 1), startTime);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(freqEnd, 1), startTime + duration);
+
+        gain.gain.setValueAtTime(volume, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(startTime);
+        osc.stop(startTime + duration + 0.02);
+    }
+
+    /* Um "chiado" curto (ruído branco com fade-out) — usado no dano */
+    function noiseBurst(duration = 0.2, volume = 0.15) {
+        const audioCtx = getCtx();
+        const bufferSize = Math.floor(audioCtx.sampleRate * duration);
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+        }
+
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+
+        noise.connect(gain).connect(audioCtx.destination);
+        noise.start();
+    }
+
+    const effects = {
+        jump: () => tone(300, 650, 0.14, 'square', 0.14),
+        hit: () => { noiseBurst(0.18, 0.18); tone(220, 90, 0.2, 'sawtooth', 0.12); },
+        defeatEnemy: () => tone(500, 140, 0.16, 'square', 0.14),
+        collectCarrot: () => { tone(520, 900, 0.08, 'square', 0.12); tone(760, 1200, 0.09, 'square', 0.1, 0.06); },
+        checkpoint: () => tone(420, 880, 0.3, 'triangle', 0.14),
+        gameOver: () => tone(320, 50, 0.9, 'sawtooth', 0.16),
+        levelComplete: () => { [523, 659, 784, 1046].forEach((f, i) => tone(f, f, 0.16, 'square', 0.14, i * 0.12)); },
+        shoot: () => tone(700, 300, 0.1, 'square', 0.1),
+        click: () => tone(600, 850, 0.06, 'square', 0.08)
+    };
+
+    return {
+        play(name) {
+            try {
+                (effects[name] || (() => {}))();
+            } catch (e) {
+                /* Se o navegador bloquear áudio por algum motivo, o jogo
+                   continua normalmente — som nunca deve travar a jogabilidade. */
+            }
+        }
+    };
+})();
+
+/* =========================================================
    HELPERS DE HUD (DOM)
 ========================================================= */
 
@@ -153,7 +235,7 @@ class MenuScene extends Phaser.Scene {
 
         button.on('pointerover', () => button.setScale(1.05));
         button.on('pointerout', () => button.setScale(1));
-        button.on('pointerdown', onClick);
+        button.on('pointerdown', () => { SFX.play('click'); onClick(); });
 
         return button;
     }
@@ -568,6 +650,8 @@ class GameScene extends Phaser.Scene {
         this.reachedCheckpoints.add(zone.checkpointIndex);
         this.currentSpawn = { x: zone.checkpointX, y: 300 };
 
+        SFX.play('checkpoint');
+
         if (zone.flagVisual) {
             zone.flagVisual.setTint(0x88ff88);
             this.tweens.add({ targets: zone.flagVisual, scale: 1.3, duration: 150, yoyo: true });
@@ -727,6 +811,8 @@ class GameScene extends Phaser.Scene {
         enemy.body.enable = false;
         enemy.body.setVelocity(0, 0);
 
+        SFX.play('defeatEnemy');
+
         const cfg = enemy.cfg;
         const visual = enemy.visual;
         if (visual) visual.anims.stop();
@@ -794,6 +880,7 @@ class GameScene extends Phaser.Scene {
 
     collectCarrot(playerBody, carrot) {
         carrot.destroy();
+        SFX.play('collectCarrot');
         this.activateCarrotPower();
     }
 
@@ -858,6 +945,8 @@ class GameScene extends Phaser.Scene {
 
         this.attackCooldown = ATTACK_COOLDOWN;
 
+        SFX.play('shoot');
+
         const direction = this.playerVisual.flipX ? -1 : 1;
         const startX = this.player.x + direction * 35;
         const startY = this.player.body.center.y;
@@ -892,6 +981,8 @@ class GameScene extends Phaser.Scene {
             this.triggerGameOver();
             return;
         }
+
+        SFX.play('hit');
 
         this.isInvincible = true;
         this.invincibleTimer = HIT_INVINCIBILITY_TIME;
@@ -936,6 +1027,8 @@ class GameScene extends Phaser.Scene {
         if (this.gameOverFlag || this.levelCompleted) return;
         this.gameOverFlag = true;
 
+        SFX.play('gameOver');
+
         if (this.levelTimerEvent) this.levelTimerEvent.remove(false);
         this.physics.pause();
 
@@ -945,6 +1038,8 @@ class GameScene extends Phaser.Scene {
     triggerGameOver() {
         if (this.gameOverFlag) return;
         this.gameOverFlag = true;
+
+        SFX.play('gameOver');
 
         if (this.levelTimerEvent) this.levelTimerEvent.remove(false);
         this.physics.pause();
@@ -1012,6 +1107,8 @@ class GameScene extends Phaser.Scene {
     completeLevel() {
         if (this.levelCompleted || this.gameOverFlag) return;
         this.levelCompleted = true;
+
+        SFX.play('levelComplete');
 
         if (this.levelTimerEvent) this.levelTimerEvent.remove(false);
         this.physics.pause();
@@ -1176,6 +1273,8 @@ class GameScene extends Phaser.Scene {
             this.player.body.setVelocityY(-jumpForce);
             this.jumpBufferTimer = 0;
             this.coyoteTimer = 0;
+
+            SFX.play('jump');
         }
 
         this.updatePlayerAnimation(onGround, movingLeft, movingRight);
@@ -1241,7 +1340,7 @@ class LevelCompleteScene extends Phaser.Scene {
 
         button.on('pointerover', () => button.setScale(1.05));
         button.on('pointerout', () => button.setScale(1));
-        button.on('pointerdown', onClick);
+        button.on('pointerdown', () => { SFX.play('click'); onClick(); });
 
         return button;
     }
@@ -1293,7 +1392,7 @@ class GameOverScene extends Phaser.Scene {
 
         button.on('pointerover', () => button.setScale(1.05));
         button.on('pointerout', () => button.setScale(1));
-        button.on('pointerdown', onClick);
+        button.on('pointerdown', () => { SFX.play('click'); onClick(); });
 
         return button;
     }
