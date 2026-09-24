@@ -5,7 +5,7 @@
    declaradas — classes não sofrem hoisting em JS)
 ========================================================= */
 
-/* Constantes de mundo/HUD compartilhadas por todas as fases */
+/* Constantes de mundo/HUD compartilhadas por todas as fases */ 
 const WORLD_HEIGHT = 540;
 const GROUND_TOP_Y = 500;
 const GROUND_HEIGHT = 40;
